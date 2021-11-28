@@ -1,8 +1,9 @@
 from hashlib import md5
 import timeit
+from random import sample
 
-N_SIZE=32
-MAX_SEARCH=250
+N_SIZE=64
+MAX_SEARCH=1000000
 
 
 class ElementHandler:
@@ -35,28 +36,29 @@ class HopschotchMap:
         element  = ElementHandler(key)
         index = self.hash(key)
         element.set_hashed_index(index)
-        if index not in self.elements.keys():
+        if index not in self.elements:
             self.elements[index] = element
             self.size += 1
             return True
+
         limit = index + MAX_SEARCH
-        capacity = self.capacity
         hashed_index = index
-        while index < limit and index < capacity:
-            if index not in self.elements.keys():
+        while index < limit and index < self.capacity:
+            if index not in self.elements:
                 break
             else:
                 array_element = self.elements[index]
                 if array_element.key == element.key:
-                    # array_element.value = value
                     self.elements[index] = array_element
                     return True
-
             index += 1
 
-        if index == capacity or index == limit:
+        # exceeded the search limit or capacity
+        if index == self.capacity or index == limit:
             return False
 
+        # if the empty slot was within the neighborhood of the index that
+        # was hashed the element can be inserted there
         if index - hashed_index < N_SIZE:
             self.elements[index] = element
             self.size += 1
@@ -69,13 +71,16 @@ class HopschotchMap:
         self.elements[index] = 0
         temp = index
 
-        while index - hashed_index > nh and index < capacity:
+        # if there was an empty spot, but it was not within the neighborhood we have to try
+        # to swap positions with elements whose index is closer to the hashed_index (while still
+        # preserving the property of being within the neighborhood for all elements)
+        while index - hashed_index > nh and index < self.capacity:
             poss_index = index - nh
             current_index = poss_index
             while current_index < index:
                 current_element = self.elements[current_index]
                 if current_element.hashed_index >= poss_index:
-                    self.elements[index] = self.elements[current_index]
+                    self.elements[index] = current_element
                     self.elements[current_index] = element
                     if current_index - hashed_index < N_SIZE:
                         success = True
@@ -98,44 +103,49 @@ class HopschotchMap:
     
     def get(self, key):
         index = self.hash(key)
-        if index in self.elements:
-            return self.elements[index].key
+        max_idx = index + N_SIZE
+        while index < max_idx and index < self.capacity:
+            if index in self.elements and self.elements[index].key == key:
+                return self.elements[index].key     
+            index += 1
         return None 
 
 
     def delete(self, key):
         index = self.hash(key)
-        if index in self.elements:
-            self.elements.pop(index, None)
-            return True
-
-        return False
-
+        max_idx = index + N_SIZE
+        while index < max_idx and index < self.capacity:
+            if index in self.elements and self.elements[index].key == key:
+                self.elements.pop(index, None)
+                return True
+            index += 1
+        return False 
     
 
 with open('../Dataset/data.txt', 'r', encoding='utf-8') as f:
     raw = f.read()
 testdata = raw.split('\n')[:-1]
 
-for m in [1000000, 5000000, 10000000]:
+for m in [100, 1000, 10000, 100000, 999998]:
     hop_s = HopschotchMap(m)
-    print("Hopscotch hashing with table size {}".format(m))
+    print("Hopscotch hashing sample size {}".format(m))
     start = timeit.default_timer()
-    for value in testdata:
+    data = sample(testdata, m)
+    for value in data:
         hop_s.set_value(str(value))
     stop = timeit.default_timer()
-    print("Inserted {} items, time: {}s".format(len(testdata), stop-start))
+    print("Inserted {} items, time: {}s".format(len(data), stop-start))
 
     print("# of collisions: {}".format(hop_s.num_collisions()))
 
     start = timeit.default_timer()
-    for value in testdata:
+    for value in data:
         hop_s.delete(value)
     stop = timeit.default_timer()
-    print("Searched {} items, time: {}s".format(len(testdata), stop-start))
+    print("Searched {} items, time: {}s".format(len(data), stop-start))
 
     start = timeit.default_timer()
-    for value in testdata:
+    for value in data:
         hop_s.get(value)
     stop = timeit.default_timer()
-    print("Deleted {} items, time: {}s".format(len(testdata), stop-start))
+    print("Deleted {} items, time: {}s".format(len(data), stop-start))
